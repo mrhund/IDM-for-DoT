@@ -3,17 +3,19 @@
 namespace App\Command;
 
 use App\Service\ApiKeyService;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+#[AsCommand(
+    name: 'app:apikeys:delete',
+    description: 'Deletes the specified API Key',
+)]
 class ApikeysDeleteCommand extends Command
 {
-    protected static $defaultName = 'app:apikeys:delete';
-    protected static $defaultDescription = 'Deletes the specified API Key';
-
     public function __construct(private readonly ApiKeyService $apiKeyService)
     {
         parent::__construct();

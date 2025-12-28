@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Service\UserService;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
@@ -10,11 +11,12 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+#[AsCommand(
+    name: 'app:user:list',
+    description: 'Lists all or one User',
+)]
 class UserListCommand extends Command
 {
-    protected static $defaultName = 'app:user:list';
-    protected static $defaultDescription = 'Lists all or one User';
-
     public function __construct(private readonly USerService $userService)
     {
         parent::__construct();

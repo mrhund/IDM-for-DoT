@@ -3,17 +3,19 @@
 namespace App\Command;
 
 use App\Service\UserService;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+#[AsCommand(
+    name: 'app:user:enable',
+    description: 'Enables a User',
+)]
 class UserEnableCommand extends Command
 {
-    protected static $defaultName = 'app:user:enable';
-    protected static $defaultDescription = 'Enables a User';
-
     public function __construct(private readonly USerService $userService)
     {
         parent::__construct();

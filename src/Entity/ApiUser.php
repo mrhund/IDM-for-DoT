@@ -3,11 +3,12 @@
 namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[ORM\Table(name: 'api_key')]
 #[ORM\Entity(repositoryClass: 'App\Repository\ApiUserRepository')]
-class ApiUser implements UserInterface
+class ApiUser implements UserInterface, PasswordAuthenticatedUserInterface
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -48,12 +49,9 @@ class ApiUser implements UserInterface
         return (string) $this->name;
     }
 
-    /**
-     * @see UserInterface
-     */
-    public function eraseCredentials()
+    #[\Deprecated(message: 'Method is empty and will be removed in the future', since: 'symfony/security-http 7.3')]
+    public function eraseCredentials(): void
     {
-        // If you store any temporary, sensitive data on the user, clear it here
     }
 
     /**

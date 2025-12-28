@@ -41,10 +41,10 @@ class ClanRepository extends ServiceEntityRepository
 
         foreach ($criteria as $k => $v) {
             $qb->andWhere($qb->expr()->eq("LOWER(c.{$k})", "LOWER(:{$k})"));
+            $qb->setParameter($k, $v);
         }
-        $qb
-            ->setParameters($criteria)
-            ->setMaxResults(1);
+        
+        $qb->setMaxResults(1);
 
         return $qb->getQuery()->getOneOrNullResult();
     }
@@ -65,8 +65,8 @@ class ClanRepository extends ServiceEntityRepository
 
         foreach ($criteria as $k => $v) {
             $qb->andWhere($qb->expr()->eq("LOWER(c.{$k})", "LOWER(:{$k})"));
+            $qb->setParameter($k, $v);
         }
-        $qb->setParameters($criteria);
 
         return $qb->getQuery()->getResult();
     }
@@ -158,9 +158,11 @@ class ClanRepository extends ServiceEntityRepository
             }
         }
 
-        $qb
-            ->andWhere($qb->expr()->andX(...$criteria))
-            ->setParameters($parameter);
+        $qb->andWhere($qb->expr()->andX(...$criteria));
+        
+        foreach ($parameter as $key => $value) {
+            $qb->setParameter($key, $value);
+        }
 
         if (empty($sort)) {
             $qb->orderBy('c.name');

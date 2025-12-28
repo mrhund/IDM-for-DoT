@@ -1,12 +1,12 @@
 restcontrollers:
     resource: ../../src/Controller/Rest/
-    type: annotation
+    type: attribute
     prefix: /api
 
 controllers:
     resource: ../../src/Controller/Admin/
-    type: annotation
+    type: attribute
 
 kernel:
     resource: ../../src/Kernel.php
-    type: annotation
+    type: attribute

@@ -18,12 +18,12 @@ class UserClan
 
     #[ORM\Id]
     #[ORM\ManyToOne(inversedBy: 'clans')]
-    #[ORM\JoinColumn(name: 'user_id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'user_id', onDelete: 'CASCADE')]
     private ?User $user = null;
 
     #[ORM\Id]
     #[ORM\ManyToOne(inversedBy: 'users')]
-    #[ORM\JoinColumn(name: 'clan_id', nullable: false, onDelete: 'CASCADE')]
+    #[ORM\JoinColumn(name: 'clan_id', onDelete: 'CASCADE')]
     private ?Clan $clan = null;
 
     #[ORM\Column(type: 'boolean')]

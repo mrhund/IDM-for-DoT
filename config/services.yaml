@@ -29,5 +29,11 @@ services:
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
 
-    App\Helper\RequestBodyPopulateParamConverter:
-        decorates: fos_rest.converter.request_body
+    # UserClanNormalizer with explicit ObjectNormalizer injection
+    App\Serializer\UserClanNormalizer:
+        arguments:
+            $on: '@serializer.normalizer.object'
+
+    # Disabled because body_converter is disabled in fos_rest.yaml (not compatible with Symfony 7.4)
+    # App\Helper\RequestBodyPopulateParamConverter:
+    #     decorates: fos_rest.converter.request_body

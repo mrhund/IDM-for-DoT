@@ -22,13 +22,16 @@ use FOS\RestBundle\View\View;
 use Nelmio\ApiDocBundle\Annotation\Model;
 use Pagerfanta\Doctrine\ORM\QueryAdapter;
 use Pagerfanta\Pagerfanta;
-use Sensio\Bundle\FrameworkExtraBundle\Configuration\ParamConverter;
 use OpenApi\Annotations as OA;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Validator\ConstraintViolationListInterface;
+use Symfony\Component\Validator\Validator\ValidatorInterface;
 
 /**
  * Class UserController.
@@ -36,8 +39,37 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 #[Rest\Route('/users')]
 class UserController extends AbstractFOSRestController
 {
-    public function __construct(private readonly EntityManagerInterface $em, private readonly UserRepository $userRepository, private readonly UserService $userService, private readonly PasswordHasherFactoryInterface $hasherFactory)
+    public function __construct(
+        private readonly EntityManagerInterface $em,
+        private readonly UserRepository $userRepository,
+        private readonly UserService $userService,
+        private readonly PasswordHasherFactoryInterface $hasherFactory,
+        private readonly SerializerInterface $serializer,
+        private readonly ValidatorInterface $validator
+    ) {
+    }
+
+    private function deserializeAndValidate(Request $request, string $type, array $groups = ['Default'], ?object $objectToPopulate = null): mixed
     {
+        $context = ['allow_extra_attributes' => false];
+        if ($objectToPopulate) {
+            $context['object_to_populate'] = $objectToPopulate;
+        }
+
+        $object = $this->serializer->deserialize(
+            $request->getContent(),
+            $type,
+            'json',
+            $context
+        );
+
+        $violations = $this->validator->validate($object, null, $groups);
+
+        if (count($violations) > 0) {
+            return $this->handleValidationErrors($violations) ?? $object;
+        }
+
+        return $object;
     }
 
     private function handleValidationErrors(ConstraintViolationListInterface $errors): ?View
@@ -75,11 +107,36 @@ class UserController extends AbstractFOSRestController
      * )
      * @OA\Tag(name="User")
      */
+    /**
+     * Gets a User.
+     *
+     * @OA\Response(
+     *     response=200,
+     *     description="Returns the User",
+     *     @OA\Schema(type="object", ref=@Model(type=\App\Entity\User::class, groups={"read"}))
+     * )
+     * @OA\Response(
+     *     response=404,
+     *     description="Returns if the user does not exitst"
+     * )
+     * @OA\Parameter(
+     *     name="uuid",
+     *     in="path",
+     *     description="the UUID of the user to query",
+     *     required=true,
+     *     @OA\Schema(type="string", format="uuid")
+     * )
+     * @OA\Tag(name="User")
+     */
     #[Rest\Get('/{uuid}', requirements: ['uuid' => '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'])]
     #[Rest\QueryParam(name: 'depth', requirements: '\d+', default: 2, allowBlank: false)]
-    #[ParamConverter('user', options: ['mapping' => ['uuid' => 'uuid']])]
-    public function getUserAction(User $user, ParamFetcher $fetcher): Response
+    public function getUserAction(string $uuid, ParamFetcher $fetcher): Response
     {
+        $user = $this->userRepository->findOneBy(['uuid' => $uuid]);
+        if (!$user) {
+            return $this->handleView($this->view(null, Response::HTTP_NOT_FOUND));
+        }
+
         $depth = intval($fetcher->get('depth'));
         $view = $this->view($user);
         $view->getContext()->setAttribute(UserClanNormalizer::DEPTH, $depth);
@@ -117,17 +174,21 @@ class UserController extends AbstractFOSRestController
      * @OA\Tag(name="User")
      */
     #[Rest\Patch('/{uuid}', requirements: ['uuid' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'])]
-    #[ParamConverter('user', class: 'App\Entity\User')]
-    #[ParamConverter('update', options: ['deserializationContext' => ['allow_extra_attributes' => false], 'validator' => ['groups' => ['Transfer', 'Unique']], 'attribute_to_populate' => 'user'], converter: 'fos_rest.request_body')]
-    public function editUserAction(User $update, ConstraintViolationListInterface $validationErrors): Response
+    public function editUserAction(string $uuid, Request $request): Response
     {
-        if ($view = $this->handleValidationErrors($validationErrors)) {
-            return $this->handleView($view);
+        $user = $this->userRepository->findOneBy(['uuid' => $uuid]);
+        if (!$user) {
+            return $this->handleView($this->view(null, Response::HTTP_NOT_FOUND));
+        }
+
+        $update = $this->deserializeAndValidate($request, User::class, ['Transfer', 'Unique'], $user);
+        if ($update instanceof View) {
+            return $this->handleView($update);
         }
 
         $hasher = $this->hasherFactory->getPasswordHasher(User::class);
 
-        if ($hasher->needsRehash($update->getPassword())) {
+        if ($update->getPassword() && $hasher->needsRehash($update->getPassword())) {
             $update->setPassword($hasher->hash($update->getPassword()));
         }
 
@@ -157,16 +218,16 @@ class UserController extends AbstractFOSRestController
      * @OA\Tag(name="User")
      */
     #[Rest\Post('')]
-    #[ParamConverter('new', options: ['deserializationContext' => ['allow_extra_attributes' => false], 'validator' => ['groups' => ['Transfer', 'Create', 'Unique']]], converter: 'fos_rest.request_body')]
-    public function createUserAction(User $new, ConstraintViolationListInterface $validationErrors): Response
+    public function createUserAction(Request $request): Response
     {
         // Known issue: if the emailConfirmed field is set and null, 400 is returned
         // This is the case although User::emailConfirmed is of type ?bool, because doctrine-bridge's DoctrineExtractor
         // (https://symfony.com/doc/current/components/property_info.html#doctrineextractor) uses the doctrine attributes.
         // maybe FIXME disable DoctrineExtractor
 
-        if ($view = $this->handleValidationErrors($validationErrors)) {
-            return $this->handleView($view);
+        $new = $this->deserializeAndValidate($request, User::class, ['Transfer', 'Create', 'Unique']);
+        if ($new instanceof View) {
+            return $this->handleView($new);
         }
 
         $hasher = $this->hasherFactory->getPasswordHasher(User::class);
@@ -189,11 +250,11 @@ class UserController extends AbstractFOSRestController
      * Supports searching via UUID
      */
     #[Rest\Post('/search')]
-    #[ParamConverter('search', options: ['deserializationContext' => ['allow_extra_attributes' => false]], converter: 'fos_rest.request_body')]
-    public function postUsersearchAction(Search $search, ConstraintViolationListInterface $validationErrors): Response
+    public function postUsersearchAction(Request $request): Response
     {
-        if ($view = $this->handleValidationErrors($validationErrors)) {
-            return $this->handleView($view);
+        $search = $this->deserializeAndValidate($request, Search::class);
+        if ($search instanceof View) {
+            return $this->handleView($search);
         }
 
         $user = $this->userRepository->findBySearch($search);
@@ -225,11 +286,11 @@ class UserController extends AbstractFOSRestController
      * @OA\Tag(name="Authorization")
      */
     #[Rest\Post('/authorize')]
-    #[ParamConverter('auth', options: ['deserializationContext' => ['allow_extra_attributes' => false]], converter: 'fos_rest.request_body')]
-    public function postAuthorizeAction(AuthObject $auth, ConstraintViolationListInterface $validationErrors): Response
+    public function postAuthorizeAction(Request $request): Response
     {
-        if ($view = $this->handleValidationErrors($validationErrors)) {
-            return $this->handleView($view);
+        $auth = $this->deserializeAndValidate($request, AuthObject::class);
+        if ($auth instanceof View) {
+            return $this->handleView($auth);
         }
 
         // Check if User can log in
@@ -250,11 +311,11 @@ class UserController extends AbstractFOSRestController
      * Post a Bulk Request object to get a response object.
      */
     #[Rest\Post('/bulk')]
-    #[ParamConverter('bulk', options: ['deserializationContext' => ['allow_extra_attributes' => false]], converter: 'fos_rest.request_body')]
-    public function postBulkRequestAction(Bulk $bulk, ConstraintViolationListInterface $validationErrors): Response
+    public function postBulkRequestAction(Request $request): Response
     {
-        if ($view = $this->handleValidationErrors($validationErrors)) {
-            return $this->handleView($view);
+        $bulk = $this->deserializeAndValidate($request, Bulk::class);
+        if ($bulk instanceof View) {
+            return $this->handleView($bulk);
         }
 
         $data = $this->userRepository->findByBulk($bulk);
@@ -319,9 +380,13 @@ class UserController extends AbstractFOSRestController
      */
     #[Rest\Get('/{uuid}/clans', requirements: ['uuid' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'])]
     #[Rest\QueryParam(name: 'depth', requirements: '\d+', default: 1, allowBlank: false)]
-    #[ParamConverter('user', options: ['mapping' => ['uuid' => 'uuid']])]
-    public function getMemberAction(User $user, ParamFetcher $fetcher): Response
+    public function getMemberAction(string $uuid, ParamFetcher $fetcher): Response
     {
+        $user = $this->userRepository->findOneBy(['uuid' => $uuid]);
+        if (!$user) {
+            return $this->handleView($this->view(null, Response::HTTP_NOT_FOUND));
+        }
+
         $result = [];
         foreach ($user->getClans() as $userClan) {
             $result[] = $userClan->getClan();
@@ -336,15 +401,23 @@ class UserController extends AbstractFOSRestController
      * Gets a Clan from a User.
      */
     #[Rest\Get('/{uuid}/clans/{clan}', requirements: ['uuid' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', 'clan' => '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'])]
-    #[ParamConverter('user', options: ['mapping' => ['uuid' => 'uuid']])]
-    #[ParamConverter('clan', options: ['mapping' => ['clan' => 'uuid']])]
-    public function getClanOfMemberAction(User $user, Clan $clan): RedirectResponse|Response
+    public function getClanOfMemberAction(string $uuid, string $clan): RedirectResponse|Response
     {
+        $user = $this->userRepository->findOneBy(['uuid' => $uuid]);
+        if (!$user) {
+            return $this->handleView($this->view(null, Response::HTTP_NOT_FOUND));
+        }
+
+        $clanEntity = $this->clanRepository->findOneBy(['uuid' => $clan]);
+        if (!$clanEntity) {
+            return $this->handleView($this->view(Error::withMessage('Clan not found'), Response::HTTP_NOT_FOUND));
+        }
+
         $clan_ids = $user->getClans()->map(fn (UserClan $uc) => $uc->getClan()->getUuid())->toArray();
-        if (!in_array($clan->getUuid(), $clan_ids)) {
+        if (!in_array($clanEntity->getUuid(), $clan_ids)) {
             return $this->handleView($this->view(Error::withMessage('User not in clan'), Response::HTTP_NOT_FOUND));
         }
 
-        return $this->redirectToRoute('app_rest_clan_getclan', ['uuid' => $clan->getUuid()]);
+        return $this->redirectToRoute('app_rest_clan_getclan', ['uuid' => $clanEntity->getUuid()]);
     }
 }

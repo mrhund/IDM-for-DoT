@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Service\UserService;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -10,11 +11,12 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
+#[AsCommand(
+    name: 'app:user:create',
+    description: 'Creates a User',
+)]
 class UserCreateCommand extends Command
 {
-    protected static $defaultName = 'app:user:create';
-    protected static $defaultDescription = 'Creates a User';
-
     public function __construct(private readonly UserService $userService)
     {
         parent::__construct();

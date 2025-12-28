@@ -6,11 +6,11 @@ use App\Entity\Clan;
 use App\Entity\User;
 use ArrayObject;
 use Symfony\Component\Serializer\Exception\InvalidArgumentException;
-use Symfony\Component\Serializer\Normalizer\ContextAwareDenormalizerInterface;
-use Symfony\Component\Serializer\Normalizer\ContextAwareNormalizerInterface;
+use Symfony\Component\Serializer\Normalizer\DenormalizerInterface;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
 
-class UserClanNormalizer implements ContextAwareNormalizerInterface, ContextAwareDenormalizerInterface
+class UserClanNormalizer implements NormalizerInterface, DenormalizerInterface
 {
     /**
      * Set to true to serialize just the UUID.
@@ -21,7 +21,7 @@ class UserClanNormalizer implements ContextAwareNormalizerInterface, ContextAwar
     {
     }
 
-    public function normalize($object, $format = null, array $context = []): array|string|int|float|bool|ArrayObject|null
+    public function normalize(mixed $object, ?string $format = null, array $context = []): array|string|int|float|bool|ArrayObject|null
     {
         $depth = array_key_exists(self::DEPTH, $context) && is_int($context[self::DEPTH]) ? intval($context[self::DEPTH]) : 1;
         $depth = $depth < 0 ? 0 : $depth;
@@ -73,7 +73,7 @@ class UserClanNormalizer implements ContextAwareNormalizerInterface, ContextAwar
         return $data;
     }
 
-    public function denormalize($data, $type, $format = null, array $context = []): mixed
+    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): mixed
     {
         $context[ObjectNormalizer::GROUPS] = ['write'];
         $context[ObjectNormalizer::IGNORED_ATTRIBUTES] = ['users', 'admins', 'clans'];
@@ -84,15 +84,23 @@ class UserClanNormalizer implements ContextAwareNormalizerInterface, ContextAwar
         return $this->on->denormalize($data, $type, $format, $context);
     }
 
-    public function supportsNormalization($data, $format = null, array $context = []): bool
+    public function supportsNormalization(mixed $data, ?string $format = null, array $context = []): bool
     {
         return $data instanceof User
             || $data instanceof Clan;
     }
 
-    public function supportsDenormalization($data, $type, $format = null, array $context = []): bool
+    public function supportsDenormalization(mixed $data, string $type, ?string $format = null, array $context = []): bool
     {
         return is_a($type, User::class, true)
             || is_a($type, Clan::class, true);
+    }
+
+    public function getSupportedTypes(?string $format): array
+    {
+        return [
+            User::class => true,
+            Clan::class => true,
+        ];
     }
 }

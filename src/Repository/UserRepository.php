@@ -11,8 +11,8 @@ use Doctrine\ORM\QueryBuilder;
 use Doctrine\Persistence\ManagerRegistry;
 use Ramsey\Uuid\Uuid;
 use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\PasswordUpgraderInterface;
-use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * @method User|null find($id, $lockMode = null, $lockVersion = null)
@@ -32,13 +32,13 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     /**
      * Used to upgrade (rehash) the user's password automatically over time.
      */
-    public function upgradePassword(UserInterface $user, string $newEncodedPassword): void
+    public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void
     {
         if (!$user instanceof User) {
             throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', $user::class));
         }
 
-        $user->setPassword($newEncodedPassword);
+        $user->setPassword($newHashedPassword);
         $this->_em->persist($user);
         $this->_em->flush();
     }
@@ -59,10 +59,10 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
 
         foreach ($criteria as $k => $v) {
             $qb->andWhere($qb->expr()->eq("LOWER(u.{$k})", "LOWER(:{$k})"));
+            $qb->setParameter($k, $v);
         }
-        $qb
-            ->setParameters($criteria)
-            ->setMaxResults(1);
+        
+        $qb->setMaxResults(1);
 
         return $qb->getQuery()->getOneOrNullResult();
     }
@@ -83,8 +83,8 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
 
         foreach ($criteria as $k => $v) {
             $qb->andWhere($qb->expr()->eq("LOWER(u.{$k})", "LOWER(:{$k})"));
+            $qb->setParameter($k, $v);
         }
-        $qb->setParameters($criteria);
 
         return $qb->getQuery()->getResult();
     }
@@ -204,9 +204,11 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
             }
         }
 
-        $qb
-            ->andWhere($qb->expr()->andX(...$criteria))
-            ->setParameters($parameter);
+        $qb->andWhere($qb->expr()->andX(...$criteria));
+        
+        foreach ($parameter as $key => $value) {
+            $qb->setParameter($key, $value);
+        }
 
         if (empty($sort)) {
             $qb->orderBy('u.nickname');

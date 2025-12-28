@@ -2,7 +2,7 @@
 fos_rest:
   disable_csrf_role: ROLE_API
   param_fetcher_listener:  true
-  allowed_methods_listener:  true
+  allowed_methods_listener:  false
   view:
     view_response_listener:  false
     jsonp_handler: ~
@@ -16,9 +16,7 @@ fos_rest:
       json: fos_rest.decoder.jsontoform
       xml: fos_rest.decoder.xml
   body_converter:
-    enabled: true
-    validate: true
-    validation_errors_argument: validationErrors # This is the default value
+    enabled: false
   format_listener:
     rules:
       #            - { path: ^/api, prefer_extension: true, fallback_format: json, priorities: [ json, html ] }
